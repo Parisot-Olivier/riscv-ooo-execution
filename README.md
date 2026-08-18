@@ -26,3 +26,5 @@ This architecture is stable, but some signal names and the location of certain i
 [in english](choice_of_language_en.md); [in french](choice_of_language_fr.md)
 
 ![](schema_pipeline_global.jpg)
+![](extention_ecall.png)
+![](pipeline_worker.png)
