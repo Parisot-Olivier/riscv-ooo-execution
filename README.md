@@ -16,6 +16,7 @@ The `src/` directory contains the main hardware implementation. Additional docum
 * **`contrats.md`** describes the contracts, assumptions, and invariants between the different parts of the system.
 * **`preuves.md`** gathers the non-trivial correctness proofs used to justify that specific mechanisms cannot lead to inconsistent states or bugs.
 * Local comments inside the source code document simpler proofs and implementation-specific assumptions when a full section in `preuves.md` is unnecessary.
+* **`roles.md`** documents the purpose and responsibility of the main signals, counters, and internal mechanisms, especially when their role is not immediately obvious from the implementation alone.
 
 The goal of this organization is to keep the code readable while making the architectural reasoning and correctness constraints explicit and traceable.
 
