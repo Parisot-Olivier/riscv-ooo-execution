@@ -116,11 +116,11 @@ class scoreboard (NUMBER_PHYSICAL_REGS: Int) extends Module {
             announced_read_counter (i) := 0.U
         } 
         
-        /* extention ecall: il faut potentiellement que les registres architecturaux soient tous prêts: considéré 
-        comme un branchement et predire s'il y aura une issue
-        
-        .elsewhen (ecall_inst && io.ROB.is_architectural_reg (i)) {
+        /* extention ecall: il faut que le registre d'appel soit prêts 
+        if (i==7) { //le registre a7 du ecall
+        .elsewhen (ecall_inst) { 
             announced_read_counter (i) := announced_read_counter (i) + 1.U 
+        }
         }
         */
     }
