@@ -37,7 +37,8 @@ class micro_op_common (SIZE_COUNTER_OP:Int, NUMBER_REGS:Int, DATA_WIDTH:Int, MAX
 
     //dès que le decodeur tombe sur un brénchement il marque toutes les instructions qu'il decode en predictive
     val is_predictive = Bool()
-    //permet de nettoyer en cas de misspredict les bon niveau de branchement
+    //permet de nettoyer en cas de misspredict les bon niveau de branchement, 
+    //il sert de pointeur de la stack dans le predicteur de branchement
     val branch_depth = UInt(log2ceil(MAX_BRANCH_FLYING).W)
     
     val counter_op = UInt(SIZE_COUNTER_OP.W)
