@@ -73,39 +73,56 @@ class scoreboard (NUMBER_PHYSICAL_REGS: Int) extends Module {
     buf_micro_op_final.issue := dependency_not_resolved (buf_micro_op.src1) | dependency_not_resolved (buf_micro_op.src2)
 
 
-    val valid_inc_src1 = RegInit(false.B)
-    val valid_inc_src2 = RegInit(false.B)
-
+    val valid_inc = RegInit(false.B)
+    val ecall_inst = RegInit(false.B)
+    
     val inc_annouced_read_src1 = RegInit(0.U(log2ceil(NUMBER_PHYSICAL_REGS).W))
     val inc_annouced_read_src2 = RegInit(0.U(log2ceil(NUMBER_PHYSICAL_REGS).W))
 
     when (buf_micro_op_final.valid) {
-        valid_inc_src1 := true.B
-        valid_inc_src2 := true.B
+        when (buf_micro_op_final.is_ecall) {
+            ecall_inst := true.B
+            valid_inc := false.B
+        } .otherwise {
+            ecall_inst := false.B
+            valid_inc := true.B
 
-        //section preuve:
-        //pas de probleme de annouced_read > served_read car au rochain cycle on est sûr que l'instruction ne va pas etre executer
-        inc_annouced_read_src1 := buf_micro_op_final.scr1
-        inc_annouced_read_src2 := buf_micro_op_final.scr2
+            io.micro_op_final := buf_micro_op_final
+        
+            //section preuve:
+            //pas de probleme de annouced_read > served_read car au rochain cycle on est sûr 
+            //que l'instruction ne va pas etre executer
+            inc_annouced_read_src1 := buf_micro_op_final.scr1
+            inc_annouced_read_src2 := buf_micro_op_final.scr2
+        }
 
     } .otherwise {
-        valid_inc_src1 := false.B
-        valid_inc_src2 := false.B
+        valid_inc := false.B
+        ecall_inst := false.B
     }
 
 
     //merged update annouced read
 
 //section preuve:
-//voir preuve 1 dans preuves.md: les deux cas du when sont distincts et annonced_read_counter doit avoir un seul driver donc un seul when
+//voir preuve 1 dans preuves.md: les deux cas du when sont distincts et annonced_read_counter doit 
+//avoir un seul driver donc un seul when
     for (i <- 0 until NUMBER_PHYSICAL_REGS) {
-        when (inc_annouced_read_src1 === i && valid_inc_src1 | inc_annouced_read_src2 === i && valid_inc_src2 |) {
+        when ((inc_annouced_read_src1 === i | inc_annouced_read_src2 === i) && valid_inc ) {
             //section preuve:
             //voir preuve 2, pas besoin de gestion du debordement du compteur
             announced_read_counter (i) := announced_read_counter (i) + 1.U 
         } .elsewhen (free_reg (i)) {
             announced_read_counter (i) := 0.U
+        } 
+        
+        /* extention ecall: il faut potentiellement que les registres architecturaux soient tous prêts: considéré 
+        comme un branchement et predire s'il y aura une issue
+        
+        .elsewhen (ecall_inst && io.ROB.is_architectural_reg (i)) {
+            announced_read_counter (i) := announced_read_counter (i) + 1.U 
         }
+        */
     }
 }
 
