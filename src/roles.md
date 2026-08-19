@@ -52,3 +52,218 @@ is_data_valid
 ```
 
 Ces trois informations couvrent trois propriétés distinctes : **production terminée**, **mapping architectural remplacé**, et **tous les consommateurs servis**.
+
+---
+
+# Role branch_predictor
+
+## Adaptation dynamique de la profondeur de spéculation à partir des erreurs du prédicteur de branchement
+
+### Principe général
+
+L’idée consiste à conserver un **prédicteur de branchement Gshare classique avec historique** pour prédire la direction des branches, tout en ajoutant un second mécanisme indépendant chargé d’adapter dynamiquement la **profondeur maximale de spéculation** du processeur\.
+
+Le Gshare continue donc de fonctionner normalement à partir du PC et de l’historique global des branches :
+
+```text
+Gshare :
+GHR = T NT T T NT ...
+```
+
+où `T` signifie *Taken* et `NT` signifie *Not Taken*\.
+
+En parallèle, un second historique mémorise non pas le résultat des branches, mais la **qualité des prédictions effectuées** :
+
+```text
+Contrôleur de profondeur :
+history = C C M M C ...
+```
+
+avec :
+
+- `C` = prédiction correcte \(*Correct*\)
+- `M` = mauvaise prédiction \(*Mispredict*\)
+
+Ces deux historiques ont donc des rôles différents\. Le premier sert à **prédire les branches**, tandis que le second sert à déterminer **à quel point le processeur peut se permettre de spéculer agressivement**\.
+
+### Profondeur de spéculation
+
+On définit une variable:
+
+```text
+max_authorized_branch_depth
+```
+
+qui représente le nombre maximal de branches non résolues sous lesquelles le processeur est autorisé à continuer à spéculer\.
+
+Une valeur élevée permet d’aller chercher et d’exécuter davantage d’instructions en avance :
+
+```text
+B1
+ └── B2
+      └── B3
+           └── B4
+                └── instructions spéculatives
+```
+
+Cela peut augmenter les performances lorsque les prédictions sont bonnes\.
+
+En revanche, si une branche ancienne est mal prédite, toutes les instructions situées sur le mauvais chemin doivent être annulées\. Une profondeur de spéculation élevée augmente alors la quantité de travail inutile\.
+
+L’objectif du contrôleur est donc d’adapter automatiquement cette profondeur à la qualité récente du prédicteur\.
+
+### Prise en compte des erreurs consécutives
+
+Le mécanisme proposé ne considère pas toutes les erreurs de la même manière\.
+
+Une mauvaise prédiction isolée peut être accidentelle et ne signifie pas nécessairement que le prédicteur traverse une mauvaise phase\. Elle entraîne donc une pénalité relativement faible\.
+
+En revanche, plusieurs mauvaises prédictions consécutives indiquent davantage que la qualité actuelle des prédictions est mauvaise\. Elles doivent donc entraîner une diminution plus importante de l’agressivité spéculative\.
+
+Une politique simple peut par exemple être :
+
+```text
+Résultat précédent   Résultat actuel   Variation du score
+----------------------------------------------------------
+C                    C                 +1
+C                    M                 -1
+M                    C                 +1 ou 0
+M                    M                 -2
+```
+
+Ainsi, la séquence :
+
+```text
+C C C M C C 
+```
+
+ne provoque qu’une faible réaction, car la mauvaise prédiction semble isolée\.
+
+En revanche :
+
+```text
+C C C M M M
+```
+
+entraîne une chute beaucoup plus rapide du score\.
+
+On peut même généraliser la pénalité en fonction du nombre de mauvaises prédictions consécutives :
+
+```text
+1er miss consécutif  → -1
+2e miss consécutif   → -2
+3e miss consécutif   → -3
+...
+```
+
+avec éventuellement une saturation afin d’éviter des variations trop importantes\.
+
+### Exemple
+
+Supposons une profondeur maximale initiale de :
+
+```text
+max_authorized_branch_depth = 6
+```
+
+et la séquence suivante :
+
+```text
+C  C  C  M  M  M
+```
+
+Le score pourrait évoluer ainsi :
+
+```text
+C → +1
+C → +1
+C → +1
+M → -1
+M → -2
+M → -3
+```
+
+La première erreur n’entraîne donc qu’une petite réduction de confiance\. En revanche, les erreurs suivantes sont de plus en plus pénalisées\.
+
+Lorsque le score descend sous certains seuils, la profondeur de spéculation est diminuée :
+
+```text
+bonne phase :
+max_authorized_branch_depth = 8
+
+quelques erreurs :
+max_authorized_branch_depth = 6
+
+mauvaise phase :
+max_authorized_branch_depth = 3
+```
+
+À l’inverse, lorsque plusieurs prédictions correctes se succèdent, le score remonte progressivement et le processeur peut de nouveau augmenter sa profondeur de spéculation\.
+
+### Intuition du mécanisme
+
+L’objectif n’est donc pas seulement d’estimer le **taux moyen de bonnes prédictions**, mais également de détecter le régime actuel du prédicteur\.
+
+Deux séquences peuvent par exemple avoir le même taux de réussite :
+
+```text
+C M C M C M C M
+```
+
+et :
+
+```text
+C C C C M M M M
+```
+
+Pourtant, la seconde séquence indique clairement qu’une mauvaise phase vient de commencer\.
+
+Un compteur classique basé uniquement sur le nombre total de succès et d’échecs pourrait considérer les deux situations comme équivalentes\. Le mécanisme proposé réagit au contraire plus fortement à la seconde, car les erreurs sont regroupées\.
+
+Il cherche donc implicitement à détecter les **rafales de mauvaises prédictions**\.
+
+### Architecture proposée
+
+L’architecture générale peut être représentée ainsi :
+
+```text
+          PC + GHR
+             │
+             ▼
+      ┌─────────────┐
+      │   Gshare    │
+      └──────┬──────┘
+             │
+       prédiction T/NT
+             │
+             ▼
+        Pipeline OoO
+             │
+        résolution branche
+             │
+             ▼
+       Correct / Miss
+             │
+             ▼
+ ┌────────────────────────┐
+ │ Contrôleur de qualité  │
+ │                        │
+ │ historique C/M         │
+ │ score                  │
+ │ compteur de miss       │
+ │ consécutifs            │
+ └───────────┬────────────┘
+             │
+             ▼
+  max_authorized_branch_depth
+```
+
+Le Gshare n’est donc pas modifié\. Le nouveau mécanisme agit uniquement sur **l’agressivité de la spéculation**\.
+
+### Résumé
+
+L’idée consiste à associer à un Gshare classique un contrôleur dynamique de profondeur de spéculation\. Ce contrôleur observe les prédictions correctes et incorrectes et adapte la profondeur maximale autorisée\.
+
+La particularité principale est que les mauvaises prédictions ne sont pas toutes pénalisées de manière identique : **plusieurs mispredictions consécutives entraînent une pénalité croissante**\. Cela permet de distinguer une erreur isolée d’une véritable période de mauvaise prédictibilité\.
+
+Le processeur peut ainsi spéculer profondément lorsque le prédicteur fonctionne bien et devenir rapidement plus conservateur lorsqu’une série de mauvaises prédictions apparaît\.
