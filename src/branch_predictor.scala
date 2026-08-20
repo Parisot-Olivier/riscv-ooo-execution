@@ -59,8 +59,7 @@ class branch_predictor (SIZE_HISTORY: Int, NUMBER_PREDICTOR_ENTRIES: Int, NUMBER
     val historic_to_uptade = Reg(UInt(log2Ceil(NUMBER_MAX_BRANCH_DEPTH).W))
 	val update_historic = WireInit(false.B)
 
-	//à modifier
-	update_historic := ready_entry_historic_update (max_authorized_branch_depth, 0) === 1.U
+	update_historic := ready_entry_historic_update (max_authorized_branch_depth, 0).andR
 	
 	// mise a jour de l'historique in order
 //a modifier / affiner l'idée: multi driven ressource
