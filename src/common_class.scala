@@ -61,12 +61,16 @@ class micro_op_common (SIZE_COUNTER_OP:Int, NUMBER_REGS:Int, DATA_WIDTH:Int, MAX
 }
 
 class micro_op_from_decoder (SIZE_COUNTER_OP:Int, NUMBER_REGS:Int, DATA_WIDTH:Int, MAX_BRANCH_FLYING: Int) extends micro_op_common {
+    val valid_src1 = Bool()
+    val valid_src2 = Bool()
     val scr1 = UInt(log2ceil(NUMBER_REGS).W)
     val scr2 = UInt(log2ceil(NUMBER_REGS).W)
     val dst = UInt(log2ceil(NUMBER_REGS).W)
 }
 
 class micro_op_renamed (SIZE_COUNTER_OP:Int, NUMBER_REGS:Int, DATA_WIDTH:Int, MAX_BRANCH_FLYING: Int) extends micro_op_common {
+    val valid_src1 = Bool()
+    val valid_src2 = Bool()
     val source_physical_reg_1 = UInt(log2ceil(NUMBER_PHYSICAL_REGS).W)
     val source_physical_reg_2 = UInt(log2ceil(NUMBER_PHYSICAL_REGS).W)
     val destination_physical_reg = UInt(log2ceil(NUMBER_PHYSICAL_REGS).W)
