@@ -89,7 +89,7 @@ class scoreboard (NUMBER_PHYSICAL_REGS: Int) extends Module {
         //que l'instruction ne va pas etre executer
         inc_annouced_read_src1 := buf_micro_op_final.scr1
         inc_annouced_read_src2 := buf_micro_op_final.scr2
-
+        // pour le cas du ecall, le decodeur met en tant que src1 le registre a7
     } .otherwise {
         valid_inc := false.B
         ecall_inst := false.B
